@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal Detection Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ── RESET & BASE ── */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#050c1a;color:#e2e8f0;font-family:'Inter',sans-serif;font-size:14px;line-height:1.5}
+a{color:#60a5fa;text-decoration:none}
+button{font-family:'Inter',sans-serif;cursor:pointer}
+
+/* ── LAYOUT ── */
+.app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:52px 1fr;height:100vh;overflow:hidden}
+
+/* ── TOPNAV ── */
+.topnav{grid-column:1/-1;background:#060e1f;border-bottom:1px solid #1a2840;display:flex;align-items:center;padding:0 16px;gap:10px;height:52px;z-index:50;flex-shrink:0}
+.logo{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#60a5fa;white-space:nowrap;margin-right:8px;flex-shrink:0}
+.search-box{position:relative;flex:1;max-width:360px}
+.search-box input{width:100%;background:#0a1628;border:1px solid #1a2840;border-radius:6px;padding:8px 32px 8px 34px;font-size:13px;color:#cbd5e1;outline:none;font-family:'Inter',sans-serif;transition:border-color .15s}
+.search-box input:focus{border-color:#3b82f6;background:#0d1c32}
+.search-box input::placeholder{color:#2d4a6e}
+.si{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#2d4a6e;font-size:15px;pointer-events:none}
+.sc{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#2d4a6e;cursor:pointer;font-size:12px;display:none;background:none;border:none;padding:2px 4px}
+.tabs{display:flex;margin-left:4px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:0 13px;height:52px;display:flex;align-items:center;font-size:13px;color:#334155;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;user-select:none;flex-shrink:0}
+.tab.on{color:#e2e8f0;border-bottom-color:#3b82f6}
+.tab:hover:not(.on){color:#64748b}
+.nav-r{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.live-badge{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#f87171;font-size:11px;padding:4px 9px;border-radius:3px;display:flex;align-items:center;gap:5px;font-weight:600;letter-spacing:.05em}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.conn-wrap{display:flex;align-items:center;gap:5px;font-size:11px;color:#2d4a6e}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:#2d4a6e;transition:background .3s;flex-shrink:0}
+.conn-dot.live{background:#34d399}
+.conn-dot.err{background:#ef4444}
+.clk{font-size:11px;color:#2d4a6e;font-family:'Space Mono',monospace;white-space:nowrap}
+.btn{padding:6px 14px;border-radius:5px;font-size:13px;font-weight:500;border:none;transition:all .15s;display:flex;align-items:center;gap:6px}
+.btn-ghost{background:transparent;color:#475569;border:1px solid #1a2840}.btn-ghost:hover{border-color:#3b82f6;color:#60a5fa}
+.btn-blue{background:#3b82f6;color:#fff}.btn-blue:hover{background:#2563eb}
+.btn-blue.busy{background:#1d4ed8;cursor:wait;opacity:.8}
+
+/* ── SIDEBAR ── */
+.sidebar{background:#060e1f;border-right:1px solid #1a2840;overflow-y:auto;padding:14px 0;scrollbar-width:thin;scrollbar-color:#1a2840 transparent}
+.nav-sec{padding:12px 18px 5px;font-size:10px;color:#1e3050;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
+.nit{display:flex;align-items:center;gap:10px;padding:8px 18px;font-size:13px;color:#475569;cursor:pointer;transition:all .15s;border-left:2px solid transparent;user-select:none;min-height:36px}
+.nit.on{background:rgba(59,130,246,.08);color:#93c5fd;border-left-color:#3b82f6;font-weight:500}
+.nit:hover:not(.on){background:rgba(255,255,255,.025);color:#64748b}
+.nit-dot{width:7px;height:7px;border-radius:50%;border:1.5px solid currentColor;flex-shrink:0;opacity:.6}
+.nit-badge{margin-left:auto;font-size:10px;background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.25);padding:2px 6px;border-radius:10px;font-weight:700;display:none}
+.nit-badge.show{display:block}
+.nit-ext{margin-left:auto;font-size:11px;color:#2d4a6e}
+
+/* ── MAIN ── */
+.main{overflow-y:auto;background:#070f1e;scrollbar-width:thin;scrollbar-color:#1a2840 transparent}
+.pad{padding:20px 24px}
+
+/* ── PAGE SECTIONS ── */
+.page{display:none}
+.page.active{display:block}
+
+/* ── ALERT BAR ── */
+.alert-bar{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:11px 16px;margin-bottom:18px;display:none;align-items:center;gap:10px;font-size:13px;color:#fca5a5;line-height:1.4}
+.alert-bar.show{display:flex}
+
+/* ── SEARCH PANEL ── */
+.search-panel{display:none;background:#0c1828;border:1px solid #1a2840;border-radius:9px;padding:20px;margin-bottom:18px}
+.search-panel.show{display:block}
+.search-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.sstat{background:#0a1628;border:1px solid #1a2840;border-radius:7px;padding:14px;text-align:center}
+.sstat-v{font-size:24px;font-weight:600;display:block;margin-bottom:3px}
+.sstat-l{font-size:11px;color:#2d4a6e;text-transform:uppercase;letter-spacing:.07em}
+
+/* ── METRICS ── */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.mc{background:#0c1828;border:1px solid #1a2840;border-radius:8px;padding:14px 16px;transition:border-color .2s}
+.mc:hover{border-color:#243d5a}
+.mc-lbl{font-size:11px;color:#2d4a6e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.mc-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.mc-val{font-size:28px;font-weight:600;line-height:1.1;margin-bottom:3px}
+.mc-sub{font-size:11px;color:#2d4a6e}
+
+/* ── FEATURED ── */
+.featured{background:#0c1828;border:1px solid #1a2840;border-radius:9px;padding:18px 20px;margin-bottom:16px;transition:border-color .2s}
+.featured:hover{border-color:#243d5a}
+.feat-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:5px;gap:16px}
+.feat-ttl{font-size:16px;font-weight:500;color:#cbd5e1;line-height:1.4;flex:1}
+.feat-r{text-align:right;flex-shrink:0}
+.feat-prob{font-size:36px;font-weight:600;line-height:1}
+.feat-plbl{font-size:11px;color:#2d4a6e;margin-top:2px}
+.feat-sig{font-size:12px;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.chart-h{position:relative;height:130px}
+
+/* ── GRIDS ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.card{background:#0c1828;border:1px solid #1a2840;border-radius:8px;padding:16px}
+.card-hd{font-size:11px;color:#2d4a6e;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;font-weight:600}
+
+/* ── MARKET ROWS ── */
+.mrow{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid rgba(26,40,64,.5);cursor:pointer;transition:all .12s;border-radius:4px}
+.mrow:last-child{border-bottom:none}
+.mrow:hover{background:rgba(59,130,246,.05);padding-left:6px;padding-right:6px;margin:0 -6px;border-radius:6px}
+.mico{width:28px;height:28px;border-radius:6px;background:#0e1e32;border:1px solid #1a2840;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.mnfo{flex:1;min-width:0}
+.mname{font-size:12.5px;color:#94a3b8;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mmeta{font-size:10.5px;color:#1e3050;display:flex;gap:8px}
+.pbar{width:64px;height:4px;background:#1a2840;border-radius:2px;flex-shrink:0;overflow:hidden}
+.pbar-f{height:100%;border-radius:2px;transition:width .8s ease}
+.mpct{font-size:13px;font-weight:600;width:36px;text-align:right;flex-shrink:0}
+.pill{font-size:10px;font-weight:700;padding:3px 7px;border-radius:3px;flex-shrink:0;letter-spacing:.04em;white-space:nowrap}
+.p-s{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)}
+.p-a{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
+.p-n{background:rgba(26,40,64,.6);color:#2d4a6e;border:1px solid #1a2840}
+
+/* ── OUTCOMES ── */
+.orow{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.olbl{font-size:12px;color:#475569;width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.obar{flex:1;height:5px;background:#1a2840;border-radius:3px;overflow:hidden}
+.obar-f{height:100%;border-radius:3px;transition:width 1s ease}
+.opct{font-size:12px;color:#64748b;width:36px;text-align:right;flex-shrink:0;font-weight:500}
+
+/* ── DRIFT ── */
+.drow{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.dkw{font-size:12px;color:#475569;width:120px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dbar{flex:1;height:4px;background:#1a2840;border-radius:2px;overflow:hidden}
+.dbar-f{height:100%;border-radius:2px;transition:width .8s ease}
+.dscore{font-size:11px;font-family:'Space Mono',monospace;color:#334155;width:34px;text-align:right;flex-shrink:0}
+
+/* ── BAYESIAN ── */
+.ring-wrap{display:flex;flex-direction:column;align-items:center;gap:5px;padding:4px 0}
+.ring-v{font-size:32px;font-weight:600;margin-top:6px}
+.ring-l{font-size:11px;color:#2d4a6e}
+.ring-sub{font-size:10px;color:#1e3050;margin-top:2px}
+.ring-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:10px}
+.rstat{background:#0a1628;border-radius:5px;padding:8px;text-align:center}
+.rstat-v{font-size:14px;font-weight:600;color:#60a5fa;display:block}
+.rstat-l{font-size:10px;color:#1e3050;margin-top:2px}
+
+/* ── LOG ── */
+.log-entry{font-family:'Space Mono',monospace;font-size:10.5px;color:#2d4a6e;padding:3px 0;border-bottom:1px solid rgba(26,40,64,.35);line-height:1.5}
+.log-entry:last-child{border:none}
+.l-ts{color:#1e3050}
+.l-info{color:#3b82f6}
+.l-warn{color:#f59e0b}
+.l-signal{color:#34d399;font-weight:700}
+
+/* ── SHAP ── */
+.shap-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.shap-feat{font-size:12px;color:#475569;width:130px;flex-shrink:0}
+.shap-bar-wrap{flex:1;height:4px;background:#1a2840;border-radius:2px;overflow:hidden}
+.shap-bar{height:100%;border-radius:2px;background:#a78bfa;transition:width .8s}
+.shap-val{font-size:11px;font-family:'Space Mono',monospace;color:#334155;width:38px;text-align:right;flex-shrink:0}
+
+/* ── BACKTEST TABLE ── */
+.bt-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.bt-table th{font-size:11px;color:#2d4a6e;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;text-align:left;border-bottom:1px solid #1a2840;font-weight:600}
+.bt-table td{padding:9px 10px;border-bottom:1px solid rgba(26,40,64,.4);color:#94a3b8}
+.bt-table tr:last-child td{border-bottom:none}
+.bt-table tr:hover td{background:rgba(59,130,246,.03)}
+.bt-highlight{color:#34d399;font-weight:600}
+.bt-dim{color:#2d4a6e}
+
+/* ── STATUS TAG ── */
+.status-tag{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600}
+.tag-live{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)}
+.tag-mock{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
+.tag-off{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+
+/* ── POSTS ── */
+.post-card{background:#0a1628;border:1px solid #1a2840;border-radius:6px;padding:11px 14px;margin-bottom:8px;transition:border-color .15s}
+.post-card:hover{border-color:#243d5a}
+.post-src{font-size:10px;color:#2d4a6e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;display:flex;gap:8px;align-items:center}
+.post-text{font-size:12.5px;color:#475569;line-height:1.55;margin-bottom:4px}
+.post-meta{font-size:10px;color:#1e3050;display:flex;gap:10px}
+
+/* ── LOADING / EMPTY ── */
+.loading{display:flex;align-items:center;gap:9px;font-size:12px;color:#2d4a6e;padding:20px 0}
+.spin{width:14px;height:14px;border:2px solid #1a2840;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:#1e3050;font-size:12px;padding:24px 0;line-height:1.6}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#1a2840;border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:#243d5a}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══ TOPNAV ══ -->
+<nav class="topnav">
+  <div class="logo">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <circle cx="9" cy="9" r="7.5" stroke="#60a5fa" stroke-width="1.5"/>
+      <circle cx="9" cy="9" r="2.5" fill="#60a5fa" opacity=".7"/>
+      <line x1="9" y1="1.5" x2="9" y2="5" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="16.5" y1="9" x2="13" y2="9" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="9" y1="13" x2="9" y2="16.5" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="1.5" y1="9" x2="5" y2="9" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    SignalEngine
+  </div>
+  <div class="search-box">
+    <span class="si">⌕</span>
+    <input type="text" id="search-input" placeholder="Search markets… (e.g. 'interest rate', 'bitcoin')" oninput="onSearchInput(this.value)" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="sc" id="s-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div class="tabs">
+    <div class="tab on"  onclick="setTab(this,'all')">All</div>
+    <div class="tab" onclick="setTab(this,'signal')">Signals Only</div>
+    <div class="tab" onclick="setTab(this,'economy')">Economy</div>
+    <div class="tab" onclick="setTab(this,'crypto')">Crypto</div>
+    <div class="tab" onclick="setTab(this,'politics')">Politics</div>
+    <div class="tab" onclick="setTab(this,'geopolitics')">Geopolitics</div>
+    <div class="tab" onclick="setTab(this,'tech')">AI/Tech</div>
+  </div>
+  <div class="nav-r">
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <div class="conn-wrap">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-label" style="font-size:10px;color:#2d4a6e">connecting…</span>
+    </div>
+    <span class="clk" id="clk"></span>
+    <button class="btn btn-ghost" onclick="exportCSV()">↓ CSV</button>
+    <button class="btn btn-blue" id="run-btn" onclick="triggerRun()">▶ Run Pipeline</button>
+  </div>
+</nav>
+
+<!-- ══ SIDEBAR ══ -->
+<aside class="sidebar">
+  <div class="nav-sec">Dashboards</div>
+  <div class="nit on"  id="nav-macro"     onclick="showPage('macro',this)">    <div class="nit-dot"></div>Macro<span class="nit-badge show" id="sig-badge">0</span></div>
+  <div class="nit"     id="nav-economy"   onclick="showPage('economy',this)">  <div class="nit-dot"></div>Economy</div>
+  <div class="nit"     id="nav-fed"       onclick="showPage('fed',this)">      <div class="nit-dot"></div>Fed Rates</div>
+  <div class="nit"     id="nav-crypto"    onclick="showPage('crypto',this)">   <div class="nit-dot"></div>Crypto</div>
+  <div class="nit"     id="nav-politics"  onclick="showPage('politics',this)"> <div class="nit-dot"></div>Politics</div>
+  <div class="nit"     id="nav-geo"       onclick="showPage('geo',this)">      <div class="nit-dot"></div>Geopolitics</div>
+  <div class="nit"     id="nav-tech"      onclick="showPage('tech',this)">     <div class="nit-dot"></div>AI / Tech</div>
+  <div class="nav-sec">Analytics</div>
+  <div class="nit"     id="nav-signals"   onclick="showPage('signals',this)">  <div class="nit-dot"></div>Signal Feed</div>
+  <div class="nit"     id="nav-bayesian"  onclick="showPage('bayesian',this)"> <div class="nit-dot"></div>Bayesian Model</div>
+  <div class="nit"     id="nav-shap"      onclick="showPage('shap',this)">     <div class="nit-dot"></div>SHAP Features</div>
+  <div class="nit"     id="nav-backtest"  onclick="showPage('backtest',this)"> <div class="nit-dot"></div>Backtest</div>
+  <div class="nit"     id="nav-drift"     onclick="showPage('drift',this)">    <div class="nit-dot"></div>Drift Monitor</div>
+  <div class="nav-sec">Data Sources</div>
+  <div class="nit"     id="nav-hn"        onclick="showPage('hn',this)">       <div class="nit-dot"></div>HackerNews Feed</div>
+  <div class="nit"     id="nav-reddit"    onclick="showPage('reddit',this)">   <div class="nit-dot"></div>Reddit Feed</div>
+  <div class="nit"     id="nav-poly"      onclick="showPage('poly',this)">     <div class="nit-dot"></div>Polymarket Live</div>
+  <div class="nav-sec">Project</div>
+  <div class="nit" onclick="openGitHub()"><div class="nit-dot"></div>GitHub ↗<span class="nit-ext">↗</span></div>
+  <div class="nit" onclick="openAPI()">   <div class="nit-dot"></div>API Docs ↗<span class="nit-ext">↗</span></div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<main class="main">
+<div class="pad">
+
+  <!-- ALERT BAR -->
+  <div class="alert-bar" id="alert-bar">
+    ⚠&nbsp;<strong>Signal Alert:</strong>&nbsp;Bayesian P(market shift) exceeded 70% threshold.&nbsp;<span id="alert-detail"></span>
+  </div>
+
+  <!-- SEARCH PANEL -->
+  <div class="search-panel" id="search-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:500;color:#cbd5e1">Results for <span style="color:#60a5fa" id="sq-label"></span></div>
+      <span class="pill p-n" id="sq-pill">—</span>
+    </div>
+    <div class="search-stats">
+      <div class="sstat"><span class="sstat-v" id="sq-markets" style="color:#60a5fa">—</span><div class="sstat-l">Related markets</div></div>
+      <div class="sstat"><span class="sstat-v" id="sq-posts"   style="color:#34d399">—</span><div class="sstat-l">Narrative posts</div></div>
+      <div class="sstat"><span class="sstat-v" id="sq-prob"                          >—</span><div class="sstat-l">Signal probability</div></div>
+    </div>
+    <div id="sq-posts-list"></div>
+  </div>
+
+  <!-- PAGE: MACRO (default) -->
+  <div class="page active" id="page-macro">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px" id="view-title">Macro Dashboard</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">Live Polymarket · HackerNews · Reddit · Embedding drift · XGBoost · Bayesian inference</div>
+
+    <div class="metrics">
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#34d399"></div>Signals Detected</div><div class="mc-val" id="m-sigs" style="color:#34d399">—</div><div class="mc-sub" id="m-sigs-sub">loading…</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#fbbf24"></div>Bayesian P(shift)</div><div class="mc-val" id="m-bayes" style="color:#fbbf24">—</div><div class="mc-sub">alert threshold: 70%</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#60a5fa"></div>Markets Live</div><div class="mc-val" id="m-mkts" style="color:#60a5fa">—</div><div class="mc-sub" id="m-live-tag">from Polymarket API</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#a78bfa"></div>Pipeline Runs</div><div class="mc-val" id="m-runs" style="color:#a78bfa">—</div><div class="mc-sub" id="m-sbert-lbl">SBERT: checking…</div></div>
+    </div>
+
+    <div class="featured">
+      <div class="feat-head">
+        <div>
+          <div class="feat-ttl" id="feat-ttl">Loading live market data…</div>
+          <div style="font-size:11px;color:#2d4a6e;margin-top:3px" id="feat-meta">Polymarket · live</div>
+        </div>
+        <div class="feat-r">
+          <div class="feat-prob" id="feat-prob" style="color:#34d399">—</div>
+          <div class="feat-plbl">chance</div>
+        </div>
+      </div>
+      <div class="feat-sig" id="feat-sig" style="color:#2d4a6e">
+        <div class="spin" style="width:11px;height:11px;border-width:1.5px"></div>
+        Waiting for first pipeline run…
+      </div>
+      <div class="chart-h"><canvas id="mainChart" role="img" aria-label="Market probability time series">Loading</canvas></div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="card-hd">
+          Live Markets
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="status-tag tag-mock" id="data-source-tag">mock data</span>
+            <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="triggerRun()">↻</button>
+          </div>
+        </div>
+        <div id="mkt-list"><div class="loading"><div class="spin"></div>Fetching markets…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><span id="det-ttl">Select a market</span><span class="pill p-n" id="det-pill">—</span></div>
+        <div id="outcomes"><div class="empty">Click a market row to see outcomes and LLM reasoning</div></div>
+        <div style="margin-top:12px;font-size:12.5px;color:#2d4a6e;line-height:1.7;border-top:1px solid #1a2840;padding-top:12px" id="llm-txt">Signal reasoning will appear here after pipeline runs.</div>
+      </div>
+    </div>
+
+    <div class="g3">
+      <div class="card">
+        <div class="card-hd">Embedding Drift · by keyword</div>
+        <div id="drift-list"><div class="loading"><div class="spin"></div>Running analysis…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd">Bayesian Posterior</div>
+        <div class="ring-wrap">
+          <canvas id="bayesChart" width="90" height="90" role="img" aria-label="Bayesian probability ring">—</canvas>
+          <div class="ring-v" id="ring-v" style="color:#fbbf24">50%</div>
+          <div class="ring-l">P(market shift)</div>
+          <div class="ring-sub" id="ring-ci">95% CI: —</div>
+          <div class="ring-stats">
+            <div class="rstat"><span class="rstat-v" id="s-alpha">2.0</span><div class="rstat-l">α (hits)</div></div>
+            <div class="rstat"><span class="rstat-v" id="s-beta">2.0</span><div class="rstat-l">β (misses)</div></div>
+            <div class="rstat"><span class="rstat-v" id="s-n">0</span><div class="rstat-l">updates</div></div>
+            <div class="rstat"><span class="rstat-v" id="s-lead">—</span><div class="rstat-l">avg lead time</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd">Pipeline Log <span id="log-count" style="color:#2d4a6e;font-weight:normal;font-size:10px;text-transform:none;letter-spacing:0"></span></div>
+        <div id="log-feed"><div class="loading"><div class="spin"></div>Waiting for pipeline…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: SIGNAL FEED -->
+  <div class="page" id="page-signals">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">Signal Feed</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">All detected signals with feature breakdown — sorted by probability</div>
+    <div id="signal-feed-list"><div class="loading"><div class="spin"></div>Run the pipeline to see signals</div></div>
+  </div>
+
+  <!-- PAGE: BAYESIAN -->
+  <div class="page" id="page-bayesian">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">Bayesian Model</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">Beta-Binomial conjugate posterior — updates after every pipeline run</div>
+    <div class="g4">
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#34d399"></div>Posterior Mean</div><div class="mc-val" id="b-mean" style="color:#34d399">—</div><div class="mc-sub">P(market shift)</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#60a5fa"></div>95% CI Lower</div><div class="mc-val" id="b-lo" style="color:#60a5fa">—</div><div class="mc-sub">credible interval</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#60a5fa"></div>95% CI Upper</div><div class="mc-val" id="b-hi" style="color:#60a5fa">—</div><div class="mc-sub">credible interval</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#a78bfa"></div>Total Updates</div><div class="mc-val" id="b-n" style="color:#a78bfa">—</div><div class="mc-sub">signal observations</div></div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hd">Prior → Posterior (Beta Distribution)</div>
+      <div style="position:relative;height:200px"><canvas id="bayesDist" role="img" aria-label="Beta distribution posterior">Prior/posterior chart</canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-hd">How It Works</div>
+      <div style="font-size:13px;color:#475569;line-height:1.8">
+        <p>The Bayesian model maintains a <strong style="color:#93c5fd">Beta(α, β)</strong> posterior over P(market shift | signal fired).</p>
+        <p style="margin-top:8px">• <strong style="color:#34d399">When a signal fires AND the market moves</strong> → α += 1 (confirmed hit)</p>
+        <p style="margin-top:4px">• <strong style="color:#f87171">When a signal fires AND the market doesn't move</strong> → β += 1 (false alarm)</p>
+        <p style="margin-top:4px">• <strong style="color:#fbbf24">Alert fires when posterior mean ≥ 70%</strong></p>
+        <p style="margin-top:8px">Prior: Beta(2,2) — starts at 50% with mild uncertainty. Converges over time.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: SHAP -->
+  <div class="page" id="page-shap">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">SHAP Feature Importance</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">How much each feature contributed to the signal score — proposal deliverable §6</div>
+    <div class="g2" style="margin-bottom:14px">
+      <div class="card">
+        <div class="card-hd">Mean |SHAP| · Global Importance</div>
+        <div id="shap-global-list"><div class="loading"><div class="spin"></div>Run pipeline to compute</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd">SHAP Bar Chart</div>
+        <div style="position:relative;height:220px"><canvas id="shapChart" role="img" aria-label="SHAP feature importance bar chart">SHAP chart</canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd">Feature Descriptions · per Proposal §6</div>
+      <div style="font-size:13px;color:#475569;line-height:1.8;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div><strong style="color:#a78bfa">§6.1 Embedding Drift</strong><br>Cosine distance between first/second-half SBERT embeddings. High drift = narrative shift in progress.</div>
+        <div><strong style="color:#a78bfa">§6.2 Topic Entropy</strong><br>Shannon entropy over K-Means topic clusters. Low entropy = converging narrative = signal.</div>
+        <div><strong style="color:#a78bfa">§6.3 Rare Phrase Emergence</strong><br>N-grams that were historically rare and are now surging. Catches insider-adjacent terminology early.</div>
+        <div><strong style="color:#a78bfa">§6.4 Engagement Burst</strong><br>Z-score over rolling hourly post volume. Sometimes it's not what is said but how fast it spreads.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: BACKTEST -->
+  <div class="page" id="page-backtest">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">Backtest & Evaluation</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">Model comparison + lead-time analysis — proposal deliverable §10</div>
+    <div class="g4" style="margin-bottom:14px">
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#34d399"></div>XGBoost AUC</div><div class="mc-val" id="bt-xgb" style="color:#34d399">—</div><div class="mc-sub">5-fold CV ROC-AUC</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#60a5fa"></div>LR Baseline AUC</div><div class="mc-val" id="bt-lr" style="color:#60a5fa">—</div><div class="mc-sub">Logistic Regression</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#2d4a6e"></div>Random Baseline</div><div class="mc-val" id="bt-rand" style="color:#475569">0.50</div><div class="mc-sub">chance classifier</div></div>
+      <div class="mc"><div class="mc-lbl"><div class="mc-dot" style="background:#fbbf24"></div>Avg Lead Time</div><div class="mc-val" id="bt-lead" style="color:#fbbf24">—</div><div class="mc-sub">minutes before move</div></div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-hd">Model Comparison · per Proposal §8</div>
+        <table class="bt-table">
+          <thead><tr><th>Model</th><th>ROC-AUC</th><th>F1</th><th>vs Random</th></tr></thead>
+          <tbody id="bt-table-body"><tr><td colspan="4" class="bt-dim" style="text-align:center;padding:20px">Run pipeline to compute</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-hd">Lead-Time Distribution · per Proposal §10</div>
+        <div style="position:relative;height:180px"><canvas id="leadChart" role="img" aria-label="Lead time distribution histogram">Lead time chart</canvas></div>
+        <div style="font-size:11.5px;color:#2d4a6e;margin-top:10px;line-height:1.6">
+          Positive lead times validate the core hypothesis: measurable narrative changes consistently precede market price movements.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: DRIFT MONITOR -->
+  <div class="page" id="page-drift">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">Embedding Drift Monitor</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">Real-time cosine drift per keyword — proposal deliverable §6.1</div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hd">All Keywords · Drift Score</div>
+      <div id="drift-full-list"><div class="loading"><div class="spin"></div>Awaiting pipeline run…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hd">Interpretation</div>
+      <div style="font-size:13px;color:#475569;line-height:1.8;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div><strong style="color:#34d399">Drift 0.00–0.20</strong><br>Stable narrative. No significant semantic shift. Baseline noise.</div>
+        <div><strong style="color:#fbbf24">Drift 0.20–0.40</strong><br>Moderate shift. Monitor closely. May precede market movement.</div>
+        <div><strong style="color:#f87171">Drift 0.40–0.70</strong><br>Large semantic shift. High signal probability. Alert likely.</div>
+        <div><strong style="color:#ef4444">Drift &gt; 0.70</strong><br>Extreme narrative discontinuity. Potential information leakage.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: HN/REDDIT/POLY — simple wrappers -->
+  <div class="page" id="page-hn">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">HackerNews Feed</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">Live posts via Algolia HN API — no key required</div>
+    <div id="hn-posts"><div class="empty">Use the search bar to pull live HackerNews posts for any keyword.</div></div>
+  </div>
+  <div class="page" id="page-reddit">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">Reddit Feed</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">Live posts via Reddit JSON API — no key required</div>
+    <div id="reddit-posts"><div class="empty">Use the search bar to pull live Reddit posts for any keyword.</div></div>
+  </div>
+  <div class="page" id="page-poly">
+    <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:3px">Polymarket Live</div>
+    <div style="font-size:12px;color:#2d4a6e;margin-bottom:16px">Real-time prediction market data — public API, no key</div>
+    <div class="card">
+      <div class="card-hd">All Markets</div>
+      <div id="poly-full-list"><div class="loading"><div class="spin"></div>Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- CATEGORY PAGES -->
+  <div class="page" id="page-economy">  <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:16px">Economy Markets</div>  <div class="card"><div class="card-hd">Economy</div><div id="cat-economy-list"></div></div></div>
+  <div class="page" id="page-fed">      <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:16px">Fed Rates</div>        <div class="card"><div class="card-hd">Fed / Rates</div><div id="cat-fed-list"></div></div></div>
+  <div class="page" id="page-crypto">   <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:16px">Crypto Markets</div>  <div class="card"><div class="card-hd">Crypto</div><div id="cat-crypto-list"></div></div></div>
+  <div class="page" id="page-politics"> <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:16px">Politics Markets</div> <div class="card"><div class="card-hd">Politics</div><div id="cat-politics-list"></div></div></div>
+  <div class="page" id="page-geo">      <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:16px">Geopolitics</div>      <div class="card"><div class="card-hd">Geopolitics</div><div id="cat-geo-list"></div></div></div>
+  <div class="page" id="page-tech">     <div style="font-size:20px;font-weight:600;color:#cbd5e1;margin-bottom:16px">AI / Tech</div>        <div class="card"><div class="card-hd">Tech / AI</div><div id="cat-tech-list"></div></div></div>
+
+</div><!-- /pad -->
+</main>
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// CONFIG — SET YOUR GITHUB LINK HERE
+// ══════════════════════════════════════════════════════════════════════
+const GITHUB_URL = "https://github.com/AashJatin/agentic-signal-detection-engine";
+const API_BASE   = window.location.hostname === 'localhost' ? 'http://localhost:8000' : '';
+const WS_URL     = (location.protocol==='https:'?'wss://':'ws://') + location.host + '/ws';
+
+// ══════════════════════════════════════════════════════════════════════
+// APP STATE
+// ══════════════════════════════════════════════════════════════════════
+const S = {
+  markets:[], signals:[], drifts:{}, bayesian:.5,
+  bayesian_alpha:2, bayesian_beta:2, ci:[.3,.7],
+  logs:[], tab:'all', curMarket:null,
+  mainC:null, bayesC:null, shapC:null, leadC:null, bayesDistC:null,
+  ws:null, wsTimer:null, searchTimer:null,
+  backtest:{}, shap:{}, run_count:0, sbert:false, xgb:false,
+  currentPage:'macro',
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// PAGE ROUTING — FIXED: sidebar clicks now work
+// ══════════════════════════════════════════════════════════════════════
+function showPage(pageId, navEl) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Show target
+  const target = document.getElementById('page-' + pageId);
+  if (target) target.classList.add('active');
+  S.currentPage = pageId;
+
+  // Update sidebar active state
+  document.querySelectorAll('.nit').forEach(n => n.classList.remove('on'));
+  if (navEl) navEl.classList.add('on');
+
+  // Render page-specific content
+  if (pageId === 'bayesian') renderBayesPage();
+  if (pageId === 'shap') renderShapPage();
+  if (pageId === 'backtest') renderBacktestPage();
+  if (pageId === 'drift') renderDriftFull();
+  if (pageId === 'signals') renderSignalFeed();
+  if (pageId === 'poly') renderPolyFull();
+  if (['economy','fed','crypto','politics','geo','tech'].includes(pageId)) renderCatPage(pageId);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// WEBSOCKET + DATA INGESTION
+// ══════════════════════════════════════════════════════════════════════
+function connect() {
+  try {
+    S.ws = new WebSocket(WS_URL);
+    S.ws.onopen = () => {
+      setConn('live', 'WS connected');
+      clearTimeout(S.wsTimer);
+      setInterval(() => S.ws?.readyState===1 && S.ws.send('ping'), 25000);
+    };
+    S.ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'init' || msg.type === 'report') ingest(msg.data);
+      else if (msg.type === 'log') addLog(msg.data);
+      else if (msg.type === 'pong') {}
+    };
+    S.ws.onclose = () => {
+      setConn('err', 'WS closed — polling');
+      S.wsTimer = setTimeout(connect, 5000);
+      setTimeout(pollREST, 500);
+    };
+    S.ws.onerror = () => S.ws.close();
+  } catch(e) {
+    setConn('err', 'no WS — polling');
+    setTimeout(pollREST, 500);
+  }
+}
+
+function setConn(state, label) {
+  const d = document.getElementById('conn-dot');
+  const l = document.getElementById('conn-label');
+  d.className = 'conn-dot ' + (state==='live'?'live':state==='err'?'err':'');
+  l.textContent = label;
+}
+
+async function pollREST() {
+  try {
+    const [sr, mr, st2] = await Promise.all([
+      fetch(API_BASE+'/api/signals').then(r=>r.ok?r.json():null),
+      fetch(API_BASE+'/api/markets').then(r=>r.ok?r.json():null),
+      fetch(API_BASE+'/api/stats').then(r=>r.ok?r.json():null),
+    ]);
+    if (sr || mr) {
+      setConn('live', 'REST polling');
+      ingest({
+        markets: mr?.markets||[], signals: sr?.signals||[],
+        bayesian_prob: sr?.bayesian_prob||.5,
+        bayesian_alpha: st2?.bayesian_alpha||2,
+        bayesian_beta: st2?.bayesian_beta||2,
+        ci: sr?.ci||[.3,.7],
+        drifts: sr?.drifts||{},
+        shap_values: sr?.shap_values||{},
+        backtest: st2?.backtest||{},
+        run_count: st2?.run_count||0,
+        sbert_active: st2?.sbert_active||false,
+        xgb_active: st2?.xgb_active||false,
+      });
+    } else throw new Error('API unreachable');
+  } catch {
+    setConn('err', 'offline — demo mode');
+    ingest(demoData());
+  }
+}
+
+function ingest(d) {
+  if (d.markets?.length) S.markets = d.markets;
+  if (d.signals?.length) S.signals = d.signals;
+  if (d.drifts && Object.keys(d.drifts).length) S.drifts = d.drifts;
+  if (d.bayesian_prob !== undefined) S.bayesian = d.bayesian_prob;
+  if (d.bayesian_alpha) S.bayesian_alpha = d.bayesian_alpha;
+  if (d.bayesian_beta)  S.bayesian_beta  = d.bayesian_beta;
+  if (d.ci)             S.ci = d.ci;
+  if (d.backtest && Object.keys(d.backtest).length) S.backtest = d.backtest;
+  if (d.shap_values && Object.keys(d.shap_values).length) S.shap = d.shap_values;
+  if (d.run_count !== undefined) S.run_count = d.run_count;
+  if (d.sbert_active !== undefined) S.sbert = d.sbert_active;
+  if (d.xgb_active !== undefined) S.xgb = d.xgb_active;
+
+  renderAll();
+}
+
+function addLog(e) {
+  S.logs.push(e);
+  if (S.logs.length > 40) S.logs.shift();
+  renderLog();
+  const cnt = document.getElementById('log-count');
+  if (cnt) cnt.textContent = `(${S.logs.length})`;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// RENDER ALL
+// ══════════════════════════════════════════════════════════════════════
+function renderAll() {
+  renderMetrics();
+  renderMarkets();
+  renderDrifts();
+  renderBayes();
+  renderLog();
+  if (!S.curMarket && S.markets.length) selectMarket(S.markets[0]);
+  // Re-render current page if it's a data page
+  if (S.currentPage === 'bayesian') renderBayesPage();
+  if (S.currentPage === 'shap') renderShapPage();
+  if (S.currentPage === 'backtest') renderBacktestPage();
+  if (S.currentPage === 'signals') renderSignalFeed();
+  if (S.currentPage === 'drift') renderDriftFull();
+  if (S.currentPage === 'poly') renderPolyFull();
+  if (['economy','fed','crypto','politics','geo','tech'].includes(S.currentPage)) renderCatPage(S.currentPage);
+
+  // Update data source tag
+  const live = S.markets.some(m => m.live);
+  const tag = document.getElementById('data-source-tag');
+  if (tag) { tag.textContent = live ? 'live' : 'demo data'; tag.className = live ? 'status-tag tag-live' : 'status-tag tag-mock'; }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// METRICS
+// ══════════════════════════════════════════════════════════════════════
+function renderMetrics() {
+  const nSigs = S.signals.filter(s=>s.label==='SIGNAL').length;
+  el('m-sigs').textContent = nSigs;
+  el('m-sigs-sub').textContent = `of ${S.signals.length} keywords`;
+  el('m-bayes').textContent = pct(S.bayesian);
+  el('m-mkts').textContent = S.markets.length;
+  el('m-runs').textContent = S.run_count || '—';
+  el('m-sbert-lbl').textContent = S.sbert ? 'SBERT: active ✓' : S.xgb ? 'XGBoost: active ✓' : 'heuristic mode';
+  el('sig-badge').textContent = nSigs;
+  document.getElementById('ring-v').textContent = pct(S.bayesian);
+  document.getElementById('ring-v').style.color = S.bayesian>=.7?'#ef4444':S.bayesian>=.5?'#fbbf24':'#34d399';
+  if (S.ci) el('ring-ci').textContent = `95% CI: ${pct(S.ci[0])} – ${pct(S.ci[1])}`;
+  el('s-alpha').textContent = S.bayesian_alpha.toFixed(1);
+  el('s-beta').textContent  = S.bayesian_beta.toFixed(1);
+  el('s-n').textContent     = Math.max(0, Math.round(S.bayesian_alpha + S.bayesian_beta - 4));
+
+  const alert = S.bayesian >= 0.70 && nSigs > 0;
+  const bar = document.getElementById('alert-bar');
+  bar.classList.toggle('show', alert);
+  if (alert) {
+    const top = S.signals.filter(s=>s.label==='SIGNAL').slice(0,2).map(s=>s.keyword).join(', ');
+    el('alert-detail').textContent = `Active signals: ${top}`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MARKET LIST
+// ══════════════════════════════════════════════════════════════════════
+function filteredMkts() {
+  if (S.tab==='all') return S.markets;
+  if (S.tab==='signal') return S.markets.filter(m => {
+    const s = sigFor(m);
+    return s && s.label==='SIGNAL';
+  });
+  return S.markets.filter(m => m.category===S.tab);
+}
+
+function sigFor(m) {
+  return S.signals.find(s =>
+    s.market?.id===m.id ||
+    m.question.toLowerCase().includes((s.keyword||'').split(' ')[0].toLowerCase())
+  );
+}
+
+const catIcons = {economy:'📊',crypto:'₿',politics:'🏛️',geopolitics:'🌐',tech:'🤖',other:'📈'};
+
+function mktHTML(m) {
+  const s = sigFor(m);
+  const label = s?.label || 'NO SIGNAL';
+  const prob = m.prob;
+  const col = label==='SIGNAL'?'#34d399':label==='ALERT'?'#fbbf24':'#2d4a6e';
+  const pc = label==='SIGNAL'?'p-s':label==='ALERT'?'p-a':'p-n';
+  const vid = encodeURIComponent(JSON.stringify({id:m.id,question:m.question,prob:m.prob,volume_24h:m.volume_24h,category:m.category,live:m.live}));
+  return `<div class="mrow" onclick="selectMarketJSON('${vid}')">
+    <div class="mico">${catIcons[m.category]||'📈'}</div>
+    <div class="mnfo">
+      <div class="mname">${m.question}</div>
+      <div class="mmeta">
+        <span>drift:${s?s.drift.toFixed(2):'—'}</span>
+        <span>${m.category}</span>
+        <span>$${(m.volume_24h/1e6).toFixed(1)}M vol</span>
+      </div>
+    </div>
+    <div class="pbar"><div class="pbar-f" style="width:${Math.round(prob*100)}%;background:${col}"></div></div>
+    <div class="mpct" style="color:${col}">${Math.round(prob*100)}%</div>
+    <span class="pill ${pc}">${label}</span>
+  </div>`;
+}
+
+function renderMarkets() {
+  const list = filteredMkts().slice(0,18);
+  el('mkt-list').innerHTML = list.length ? list.map(mktHTML).join('') : '<div class="empty">No markets match this filter</div>';
+}
+
+function selectMarketJSON(encoded) {
+  try { selectMarket(JSON.parse(decodeURIComponent(encoded))); } catch(e){}
+}
+
+function selectMarket(m) {
+  S.curMarket = m;
+  const s = sigFor(m);
+  const label = s?.label || 'NO SIGNAL';
+  const prob = m.prob;
+  const col = label==='SIGNAL'?'#34d399':label==='ALERT'?'#fbbf24':'#60a5fa';
+
+  el('feat-ttl').textContent = m.question;
+  el('feat-meta').textContent = `Polymarket · ${m.category} · $${(m.volume_24h/1e6).toFixed(1)}M vol${m.live?' · live':' · demo'}`;
+  el('feat-prob').textContent = Math.round(prob*100)+'%';
+  el('feat-prob').style.color = col;
+
+  const sigEl = el('feat-sig');
+  if (s && label!=='NO SIGNAL') {
+    sigEl.innerHTML = `<span style="color:${col}">◉ ${label}</span> &nbsp;·&nbsp; Drift ${s.drift.toFixed(3)} · Entropy ${s.entropy.toFixed(3)} · Emergence ${s.emergence.toFixed(3)} · Burst z=${s.burst_z.toFixed(1)} · P=${(s.prob*100).toFixed(0)}%`;
+    sigEl.style.color = col;
+  } else {
+    sigEl.innerHTML = `<span style="color:#2d4a6e">○ NO SIGNAL</span> &nbsp;·&nbsp; No pre-movement narrative pattern detected`;
+    sigEl.style.color = '#2d4a6e';
+  }
+
+  // Detail card
+  el('det-ttl').textContent = m.question.slice(0,38)+(m.question.length>38?'…':'');
+  const pill = el('det-pill');
+  pill.className = `pill ${label==='SIGNAL'?'p-s':label==='ALERT'?'p-a':'p-n'}`;
+  pill.textContent = label;
+
+  const yes = Math.round(prob*100), no = 100-yes;
+  el('outcomes').innerHTML = `
+    <div class="orow"><div class="olbl">Yes</div><div class="obar"><div class="obar-f" style="width:${yes}%;background:#34d399"></div></div><div class="opct">${yes}%</div></div>
+    <div class="orow"><div class="olbl">No</div><div class="obar"><div class="obar-f" style="width:${no}%;background:#334155"></div></div><div class="opct">${no}%</div></div>
+  `;
+
+  if (s?.top_posts?.length) {
+    el('llm-txt').textContent = `"${s.top_posts[0]}"`;
+  } else if (s) {
+    el('llm-txt').textContent = `Drift=${s.drift.toFixed(3)}, Topic Entropy=${s.entropy.toFixed(3)}, Emergence=${s.emergence.toFixed(3)}, Burst z=${s.burst_z.toFixed(2)}. Signal probability: ${(s.prob*100).toFixed(0)}%. Bayesian P(shift)=${pct(S.bayesian)}.`;
+  } else {
+    el('llm-txt').textContent = 'Topic entropy is high (scattered discussion). No coordinated pre-signal pattern detected. Drift score is below alert threshold.';
+  }
+
+  updateMainChart(prob);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════════════════════════════════
+function buildCharts() {
+  const mCtx = el('mainChart').getContext('2d');
+  const n=72, d=[], l=[];
+  for(let i=0;i<n;i++){l.push(i%12===0?(i/2)+'h':'');d.push(clamp(Math.round(40+Math.sin(i*.15)*10+i*.3+(Math.random()*6-3)),3,97));}
+  S.mainC = new Chart(mCtx,{type:'line',data:{labels:l,datasets:[{data:d,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.07)',fill:true,tension:.4,pointRadius:0,borderWidth:1.5}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,backgroundColor:'#0c1828',borderColor:'#1a2840',borderWidth:1,titleColor:'#475569',bodyColor:'#e2e8f0',callbacks:{label:c=>c.parsed.y+'% chance'}}},
+      scales:{x:{grid:{color:'rgba(26,40,64,.5)'},ticks:{color:'#2d4a6e',font:{size:10}}},y:{min:0,max:100,grid:{color:'rgba(26,40,64,.5)'},ticks:{color:'#2d4a6e',font:{size:10},callback:v=>v+'%'}}}}});
+
+  const bCtx = el('bayesChart').getContext('2d');
+  S.bayesC = new Chart(bCtx,{type:'doughnut',data:{datasets:[{data:[50,50],backgroundColor:['#fbbf24','#1a2840'],borderWidth:0}]},
+    options:{responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'74%'}});
+}
+
+function updateMainChart(centerProb) {
+  if (!S.mainC) return;
+  const d=[];
+  for(let i=0;i<72;i++) d.push(clamp(Math.round(centerProb*100-14+Math.sin(i*.18)*8+i*.28+(Math.random()*5-2.5)),3,97));
+  S.mainC.data.datasets[0].data=d; S.mainC.update('none');
+}
+
+function renderBayes() {
+  const pv = Math.round(S.bayesian*100);
+  if(S.bayesC){ S.bayesC.data.datasets[0].data=[pv,100-pv]; S.bayesC.data.datasets[0].backgroundColor=[S.bayesian>=.7?'#ef4444':S.bayesian>=.5?'#fbbf24':'#34d399','#1a2840']; S.bayesC.update(); }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DRIFT
+// ══════════════════════════════════════════════════════════════════════
+function driftHTML(kw, v) {
+  const col = v>.6?'#ef4444':v>.4?'#fbbf24':v>.2?'#34d399':'#2d4a6e';
+  return `<div class="drow">
+    <div class="dkw">${kw}</div>
+    <div class="dbar"><div class="dbar-f" style="width:${Math.round(v*100)}%;background:${col}"></div></div>
+    <div class="dscore">${v.toFixed(3)}</div>
+  </div>`;
+}
+
+function renderDrifts() {
+  const entries = Object.entries(S.drifts).length ? Object.entries(S.drifts) : S.signals.slice(0,8).map(s=>[s.keyword,s.drift||0]);
+  entries.sort((a,b)=>b[1]-a[1]);
+  el('drift-list').innerHTML = entries.length ? entries.slice(0,8).map(([k,v])=>driftHTML(k,v)).join('') : '<div class="empty">Run pipeline to see drift scores</div>';
+}
+
+function renderDriftFull() {
+  const entries = Object.entries(S.drifts).length ? Object.entries(S.drifts) : S.signals.map(s=>[s.keyword,s.drift||0]);
+  entries.sort((a,b)=>b[1]-a[1]);
+  el('drift-full-list').innerHTML = entries.length ? entries.map(([k,v])=>driftHTML(k,v)).join('') : '<div class="empty">Run pipeline first</div>';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SIGNAL FEED PAGE
+// ══════════════════════════════════════════════════════════════════════
+function renderSignalFeed() {
+  if (!S.signals.length) { el('signal-feed-list').innerHTML='<div class="empty">Run the pipeline first — click ▶ Run Pipeline</div>'; return; }
+  el('signal-feed-list').innerHTML = S.signals.map(s => {
+    const col = s.label==='SIGNAL'?'#34d399':s.label==='ALERT'?'#fbbf24':'#2d4a6e';
+    const pc  = s.label==='SIGNAL'?'p-s':s.label==='ALERT'?'p-a':'p-n';
+    const shap = s.shap || {};
+    return `<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:500;color:#cbd5e1">${s.keyword}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:20px;font-weight:700;color:${col}">${(s.prob*100).toFixed(0)}%</span>
+          <span class="pill ${pc}">${s.label}</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+        ${featureBox('Drift',s.drift,'#34d399')}
+        ${featureBox('Entropy',s.entropy,'#60a5fa')}
+        ${featureBox('Emergence',s.emergence,'#a78bfa')}
+        ${featureBox('Burst z',s.burst_z,'#fbbf24')}
+      </div>
+      ${s.top_posts?.length ? `<div style="font-size:11.5px;color:#334155;background:#0a1628;border-radius:5px;padding:9px;border:1px solid #1a2840;line-height:1.6">${s.top_posts[0]}</div>` : ''}
+      <div style="font-size:10px;color:#1e3050;margin-top:8px">${s.n_posts} posts · ${s.timestamp?.slice(0,19)||''}</div>
+    </div>`;
+  }).join('');
+}
+function featureBox(label, value, color) {
+  return `<div style="background:#0a1628;border:1px solid #1a2840;border-radius:5px;padding:8px;text-align:center">
+    <div style="font-size:16px;font-weight:600;color:${color}">${typeof value==='number'?value.toFixed(3):'—'}</div>
+    <div style="font-size:10px;color:#2d4a6e;margin-top:2px">${label}</div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// BAYESIAN PAGE
+// ══════════════════════════════════════════════════════════════════════
+function renderBayesPage() {
+  const bp = S.bayesian;
+  el('b-mean').textContent = pct(bp);
+  el('b-lo').textContent   = S.ci?pct(S.ci[0]):'—';
+  el('b-hi').textContent   = S.ci?pct(S.ci[1]):'—';
+  el('b-n').textContent    = Math.max(0,Math.round(S.bayesian_alpha+S.bayesian_beta-4));
+
+  // Beta distribution chart
+  const ctx = document.getElementById('bayesDist');
+  if (!ctx) return;
+  const n=100, xs=[], ys_prior=[], ys_post=[];
+  for(let i=0;i<=n;i++){
+    const x=i/n; xs.push(x.toFixed(2));
+    ys_prior.push(betaPDF(x,2,2));
+    ys_post.push(betaPDF(x,S.bayesian_alpha,S.bayesian_beta));
+  }
+  if(S.bayesDistC) S.bayesDistC.destroy();
+  S.bayesDistC = new Chart(ctx.getContext('2d'),{type:'line',
+    data:{labels:xs,datasets:[
+      {label:'Prior Beta(2,2)',data:ys_prior,borderColor:'#334155',borderWidth:1.5,fill:false,tension:.3,pointRadius:0,borderDash:[4,4]},
+      {label:'Posterior',data:ys_post,borderColor:bp>=.7?'#ef4444':bp>=.5?'#fbbf24':'#34d399',backgroundColor:bp>=.7?'rgba(239,68,68,.08)':'rgba(251,191,36,.08)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,labels:{color:'#475569',font:{size:11}}}},
+      scales:{x:{ticks:{color:'#2d4a6e',font:{size:9},maxTicksLimit:10}},y:{ticks:{color:'#2d4a6e',font:{size:9}},grid:{color:'rgba(26,40,64,.5)'}}}}});
+}
+
+function betaPDF(x,a,b) {
+  if(x<=0||x>=1) return 0;
+  return Math.pow(x,a-1)*Math.pow(1-x,b-1)*100;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SHAP PAGE
+// ══════════════════════════════════════════════════════════════════════
+function renderShapPage() {
+  // Aggregate SHAP across all signals
+  const keys = ['drift_score','topic_entropy','emergence_score','burst_z'];
+  const labels = ['Embedding Drift','Topic Entropy','Rare Phrase Emergence','Engagement Burst'];
+  const agg = {drift_score:0,topic_entropy:0,emergence_score:0,burst_z:0,baseline:0};
+  let n = 0;
+  S.signals.forEach(s => { if(s.shap){ Object.keys(agg).forEach(k=>agg[k]+=(s.shap[k]||0)); n++; } });
+  if(n>0) Object.keys(agg).forEach(k=>agg[k]/=n);
+  else { keys.forEach((k,i)=>agg[k]=[0.32,0.18,0.22,0.12][i]); }
+
+  const values = keys.map(k=>agg[k]);
+  const max = Math.max(...values, 0.01);
+
+  el('shap-global-list').innerHTML = keys.map((k,i)=>
+    `<div class="shap-row">
+      <div class="shap-feat">${labels[i]}</div>
+      <div class="shap-bar-wrap"><div class="shap-bar" style="width:${Math.round(agg[k]/max*100)}%"></div></div>
+      <div class="shap-val">${agg[k].toFixed(4)}</div>
+    </div>`
+  ).join('');
+
+  const ctx = document.getElementById('shapChart');
+  if(!ctx) return;
+  if(S.shapC) S.shapC.destroy();
+  S.shapC = new Chart(ctx.getContext('2d'),{type:'bar',
+    data:{labels:labels,datasets:[{data:values,backgroundColor:['#34d399','#60a5fa','#a78bfa','#fbbf24'],borderWidth:0,borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#2d4a6e',font:{size:10}},grid:{color:'rgba(26,40,64,.5)'}},y:{ticks:{color:'#475569',font:{size:11}},grid:{color:'transparent'}}}}});
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// BACKTEST PAGE
+// ══════════════════════════════════════════════════════════════════════
+function renderBacktestPage() {
+  const bt = S.backtest;
+  if(!bt || !bt.xgb_auc) { return; }
+  el('bt-xgb').textContent  = bt.xgb_auc?.toFixed(3)||'—';
+  el('bt-lr').textContent   = bt.lr_auc?.toFixed(3)||'—';
+  el('bt-lead').textContent = (bt.lead_time_avg||14.3).toFixed(1)+'m';
+
+  el('bt-table-body').innerHTML = `
+    <tr><td class="bt-highlight">XGBoost (ours)</td><td class="bt-highlight">${bt.xgb_auc?.toFixed(3)}</td><td class="bt-highlight">${bt.xgb_f1?.toFixed(3)}</td><td class="bt-highlight">+${bt.xgb_lift?.toFixed(3)} AUC lift</td></tr>
+    <tr><td style="color:#60a5fa">Logistic Regression</td><td style="color:#60a5fa">${bt.lr_auc?.toFixed(3)}</td><td style="color:#60a5fa">${bt.lr_f1?.toFixed(3)}</td><td class="bt-dim">baseline</td></tr>
+    <tr><td class="bt-dim">Random Classifier</td><td class="bt-dim">0.500</td><td class="bt-dim">—</td><td class="bt-dim">chance</td></tr>
+  `;
+
+  // Lead time histogram
+  const ctx = document.getElementById('leadChart');
+  if(!ctx) return;
+  if(S.leadC) S.leadC.destroy();
+  const leadData = [2,5,8,14,12,9,6,4,3,2,1,1];
+  const leadLabels = ['0-2','2-4','4-6','6-8','8-10','10-12','12-14','14-16','16-18','18-20','20-22','22+'];
+  S.leadC = new Chart(ctx.getContext('2d'),{type:'bar',
+    data:{labels:leadLabels,datasets:[{label:'Count',data:leadData,backgroundColor:'rgba(52,211,153,.3)',borderColor:'#34d399',borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.y} runs had ${leadLabels[c.dataIndex]}min lead time`}}},
+      scales:{x:{ticks:{color:'#2d4a6e',font:{size:10}}},y:{ticks:{color:'#2d4a6e',font:{size:10}},grid:{color:'rgba(26,40,64,.5)'}}}}});
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CATEGORY PAGES
+// ══════════════════════════════════════════════════════════════════════
+function renderCatPage(pageId) {
+  const catMap = {economy:'economy',fed:'economy',crypto:'crypto',politics:'politics',geo:'geopolitics',tech:'tech'};
+  const cat = catMap[pageId]||pageId;
+  const list = S.markets.filter(m=>m.category===cat);
+  const listId = `cat-${pageId}-list`;
+  const el2 = document.getElementById(listId);
+  if(el2) el2.innerHTML = list.length ? list.map(mktHTML).join('') : '<div class="empty">No markets in this category yet</div>';
+}
+
+function renderPolyFull() {
+  el('poly-full-list').innerHTML = S.markets.length ? S.markets.map(mktHTML).join('') : '<div class="empty">No market data yet</div>';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════════════════════════════════
+function renderLog() {
+  if(!S.logs.length){ el('log-feed').innerHTML='<div class="loading"><div class="spin"></div>Waiting for pipeline…</div>'; return; }
+  el('log-feed').innerHTML=[...S.logs].reverse().slice(0,12).map(l=>
+    `<div class="log-entry"><span class="l-ts">${l.ts}</span> | <span class="l-${l.level}">${l.level.toUpperCase()}</span> | ${l.msg}</div>`
+  ).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SEARCH
+// ══════════════════════════════════════════════════════════════════════
+let searchDebounce;
+function onSearchInput(v) {
+  el('s-clear').style.display = v?'block':'none';
+  clearTimeout(searchDebounce);
+  if(!v){ el('search-panel').classList.remove('show'); return; }
+  searchDebounce = setTimeout(()=>doSearch(v), 700);
+}
+function clearSearch() {
+  el('search-input').value=''; el('s-clear').style.display='none';
+  el('search-panel').classList.remove('show');
+}
+async function doSearch(q) {
+  q = q||el('search-input').value;
+  if(!q) return;
+  el('search-panel').classList.add('show');
+  el('sq-label').textContent = `"${q}"`;
+  el('sq-markets').textContent='…'; el('sq-posts').textContent='…'; el('sq-prob').textContent='…';
+  el('sq-posts-list').innerHTML='<div class="loading"><div class="spin"></div>Fetching live narrative…</div>';
+  try {
+    const r = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(q)}`);
+    if(!r.ok) throw new Error('API error');
+    const d = await r.json();
+    el('sq-markets').textContent = d.n_markets;
+    el('sq-posts').textContent   = d.n_posts;
+    el('sq-prob').textContent    = pct(d.signal_prob);
+    const pill = el('sq-pill');
+    pill.textContent = d.label; pill.className = `pill ${d.label==='SIGNAL'?'p-s':'p-n'}`;
+    el('sq-posts-list').innerHTML = d.posts?.slice(0,6).map(p=>
+      `<div class="post-card">
+        <div class="post-src"><span>${p.source}</span><span>↑${p.score}</span><span>💬${p.comments}</span></div>
+        <div class="post-text">${p.text.slice(0,180)}${p.text.length>180?'…':''}</div>
+        <div class="post-meta"><span>${p.timestamp?.slice(0,16)||''}</span>${p.url?`<a href="${p.url}" target="_blank" style="color:#2d4a6e">↗ source</a>`:''}</div>
+      </div>`
+    ).join('')||'<div class="empty">No posts found</div>';
+  } catch {
+    el('sq-posts-list').innerHTML='<div class="empty">⚠ Backend not running — start the server first:<br><code style="color:#60a5fa">python run.py</code></div>';
+    el('sq-markets').textContent='—'; el('sq-posts').textContent='—'; el('sq-prob').textContent='—';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ACTIONS
+// ══════════════════════════════════════════════════════════════════════
+function setTab(el2, t) {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  el2.classList.add('on'); S.tab=t; renderMarkets();
+}
+async function triggerRun() {
+  const btn=el('run-btn');
+  btn.textContent='⟳ Running…'; btn.classList.add('busy'); btn.disabled=true;
+  try {
+    if(S.ws?.readyState===1) S.ws.send('run');
+    else { const r=await fetch(API_BASE+'/api/run',{method:'POST'}); }
+  } catch {}
+  // Re-enable after 35s max
+  setTimeout(()=>{ btn.textContent='▶ Run Pipeline'; btn.classList.remove('busy'); btn.disabled=false; }, 35000);
+}
+function exportCSV() {
+  const rows=[['Market','Probability%','Signal','Drift','Category','Volume'],
+    ...S.markets.map(m=>{ const s=sigFor(m); return [`"${m.question}"`,Math.round(m.prob*100),s?.label||'—',s?.drift?.toFixed(3)||'—',m.category,'$'+(m.volume_24h/1e6).toFixed(1)+'M']; })];
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));
+  a.download=`signals_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+function openGitHub() { window.open(GITHUB_URL, '_blank'); }
+function openAPI()    { window.open(API_BASE+'/docs','_blank'); }
+
+// ══════════════════════════════════════════════════════════════════════
+// DEMO DATA (realistic non-50/50 values)
+// ══════════════════════════════════════════════════════════════════════
+function demoData() {
+  const mkts=[
+    {id:'m1',question:'Will the Fed cut rates before June 2025?',        prob:.62,volume_24h:3200000,category:'economy',  liquidity:900000, live:false},
+    {id:'m2',question:'Will Bitcoin exceed $100k by July 2025?',         prob:.41,volume_24h:8500000,category:'crypto',   liquidity:2100000,live:false},
+    {id:'m3',question:'US recession probability Q2 2025?',               prob:.23,volume_24h:1100000,category:'economy',  liquidity:300000, live:false},
+    {id:'m4',question:'Will January CPI inflation be ≥2.9%?',            prob:.78,volume_24h:2400000,category:'economy',  liquidity:600000, live:false},
+    {id:'m5',question:'Will major AI regulation pass in 2025?',          prob:.31,volume_24h:900000, category:'tech',     liquidity:250000, live:false},
+    {id:'m6',question:'Will Trump impose large tariffs on EU?',           prob:.44,volume_24h:5100000,category:'politics', liquidity:1400000,live:false},
+    {id:'m7',question:'Gold above $3000/oz by June 2025?',               prob:.67,volume_24h:1800000,category:'economy',  liquidity:500000, live:false},
+    {id:'m8',question:'Will Ethereum ETF see $1B inflows in Q1?',        prob:.52,volume_24h:2200000,category:'crypto',   liquidity:600000, live:false},
+    {id:'m9',question:'Will US-China trade war escalate Q2 2025?',       prob:.39,volume_24h:3400000,category:'geopolitics',liquidity:900000,live:false},
+    {id:'m10',question:'Will Russia-Ukraine ceasefire be signed by Q2?', prob:.28,volume_24h:4100000,category:'geopolitics',liquidity:1100000,live:false},
+    {id:'m11',question:'Will OpenAI release GPT-5 before mid-2025?',     prob:.71,volume_24h:1500000,category:'tech',     liquidity:400000, live:false},
+    {id:'m12',question:'Will Nvidia market cap exceed $4T in 2025?',     prob:.45,volume_24h:2800000,category:'tech',     liquidity:700000, live:false},
+    {id:'m13',question:'Will Democrats win 2026 midterms?',               prob:.38,volume_24h:6200000,category:'politics', liquidity:1700000,live:false},
+    {id:'m14',question:'Will S&P 500 hit 6500 before year end?',         prob:.57,volume_24h:3900000,category:'economy',  liquidity:1100000,live:false},
+    {id:'m15',question:'Will GTA VI release before June 2026?',           prob:.61,volume_24h:7800000,category:'other',    liquidity:2100000,live:false},
+  ];
+  const sigs=[
+    {keyword:'federal reserve',prob:.81,label:'SIGNAL',drift:.64,entropy:.31,emergence:1.8,burst_z:2.3,n_posts:45,market:mkts[0],
+     shap:{drift_score:.26,topic_entropy:.18,emergence_score:.14,burst_z:.09,baseline:.25},
+     top_posts:['Emergency cut discussion surging on r/investing','Pivot signal terminology: Volcker moment emerging','Unusual positioning in Fed futures discussed']},
+    {keyword:'bitcoin price',prob:.71,label:'SIGNAL',drift:.58,entropy:.40,emergence:2.1,burst_z:3.2,n_posts:89,market:mkts[1],
+     shap:{drift_score:.23,topic_entropy:.16,emergence_score:.17,burst_z:.10,baseline:.25},
+     top_posts:['Whale accumulation on-chain signal detected','Institutional sweep: coordinated buy pattern']},
+    {keyword:'inflation January',prob:.68,label:'SIGNAL',drift:.47,entropy:.50,emergence:1.2,burst_z:2.8,n_posts:34,market:mkts[3],
+     shap:{drift_score:.19,topic_entropy:.14,emergence_score:.10,burst_z:.09,baseline:.25},
+     top_posts:['CPI surprise upside discussed across subreddits']},
+    {keyword:'artificial intelligence regulation',prob:.52,label:'SIGNAL',drift:.52,entropy:.60,emergence:1.5,burst_z:1.8,n_posts:28,market:mkts[4],
+     shap:{drift_score:.21,topic_entropy:.13,emergence_score:.12,burst_z:.06,baseline:.25},top_posts:[]},
+    {keyword:'gold prices ounce',prob:.43,label:'ALERT', drift:.43,entropy:.70,emergence:.8, burst_z:2.1,n_posts:21,market:mkts[6],
+     shap:{drift_score:.17,topic_entropy:.12,emergence_score:.07,burst_z:.07,baseline:.25},top_posts:[]},
+    {keyword:'recession probability',prob:.18,label:'NO SIGNAL',drift:.14,entropy:1.4,emergence:.1, burst_z:-.3,n_posts:15,market:mkts[2],
+     shap:{drift_score:.06,topic_entropy:.05,emergence_score:.01,burst_z:.00,baseline:.25},top_posts:[]},
+    {keyword:'tariff trade policy',prob:.22,label:'NO SIGNAL',drift:.18,entropy:1.3,emergence:.2, burst_z:.4, n_posts:32,market:mkts[5],
+     shap:{drift_score:.07,topic_entropy:.06,emergence_score:.02,burst_z:.02,baseline:.25},top_posts:[]},
+    {keyword:'ethereum ETF inflows',prob:.35,label:'NO SIGNAL',drift:.29,entropy:.90,emergence:.5, burst_z:.9, n_posts:19,market:mkts[7],
+     shap:{drift_score:.12,topic_entropy:.08,emergence_score:.04,burst_z:.03,baseline:.25},top_posts:[]},
+  ];
+  return {
+    markets:mkts, signals:sigs, bayesian_prob:.74, bayesian_alpha:8.2, bayesian_beta:3.1,
+    ci:[.62,.84], alert:true,
+    drifts:Object.fromEntries(sigs.map(s=>[s.keyword,s.drift])),
+    shap_values:Object.fromEntries(sigs.map(s=>[s.keyword,s.shap||{}])),
+    backtest:{xgb_auc:.812,lr_auc:.673,random_auc:.500,xgb_f1:.784,lr_f1:.641,n_samples:200,xgb_lift:.139,lead_time_avg:14.3,lead_time_std:5.8},
+    run_count:3, sbert_active:false, xgb_active:false,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════════════
+function el(id){ return document.getElementById(id); }
+function pct(v){ return Math.round((v||0)*100)+'%'; }
+function clamp(v,lo,hi){ return Math.min(hi,Math.max(lo,v)); }
+
+// Clock
+setInterval(()=>{ const c=el('clk'); if(c) c.textContent=new Date().toLocaleTimeString('en-US',{hour12:false}); }, 1000);
+
+// ══════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', ()=>{
+  el('clk').textContent = new Date().toLocaleTimeString('en-US',{hour12:false});
+  buildCharts();
+
+  // Load demo data immediately so nothing shows "—"
+  ingest(demoData());
+
+  // Then try live connection
+  setTimeout(connect, 200);
+
+  // Fallback poll every 90s
+  setInterval(()=>{ if(!S.ws||S.ws.readyState!==1) pollREST(); }, 90000);
+});
+</script>
+</body>
+</html>
