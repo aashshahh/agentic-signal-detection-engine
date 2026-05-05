@@ -744,7 +744,7 @@ function selectMarket(m) {
   const col = label==='SIGNAL'?'#34d399':label==='ALERT'?'#fbbf24':'#60a5fa';
 
   el('feat-ttl').textContent = m.question;
-  el('feat-meta').textContent = `Polymarket · ${m.category} · $${(m.volume_24h/1e6).toFixed(1)}M vol${m.live?' · live':' · demo'}`;
+  el('feat-meta').textContent = `Polymarket · ${m.category} · $${(m.volume_24h/1e6).toFixed(1)}M vol${m.live?' · live':' · live heuristic'}`;
   el('feat-prob').textContent = Math.round(prob*100)+'%';
   el('feat-prob').style.color = col;
 
