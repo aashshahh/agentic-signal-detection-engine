@@ -26,7 +26,7 @@
 <br/>
 
 <!-- LINKS -->
-[**🌐 Live Demo**](https://aashjatin.github.io/agentic-signal-detection-engine) · [**📊 Dashboard**](https://your-app.onrender.com) · [**📄 API Docs**](https://your-app.onrender.com/docs) · [**📑 Research Report**](docs/EMT678A_Report_AashJatinShah.pdf)
+[**🌐 Live Demo**](https://aashjatin.github.io/agentic-signal-detection-engine) · [**📊 Dashboard**](https://your-app.onrender.com) · [**📄 API Docs**](https://your-app.onrender.com/docs) · [**📑 Research Report**](AashJatinShah_report.pdf)
 
 <br/>
 
